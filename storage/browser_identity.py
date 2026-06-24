@@ -1,0 +1,60 @@
+"""No-login browser identity for per-browser chat history."""
+
+import re
+import uuid
+
+BROWSER_ID_SESSION_KEY = "browser_id"
+BROWSER_ID_QUERY_KEY = "bid"
+BROWSER_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{12,80}$")
+
+
+def is_valid_browser_id(value):
+    # Safe browser id lang ang tatanggapin.
+    return bool(value and BROWSER_ID_RE.match(str(value)))
+
+
+def get_query_browser_id(st):
+    # Basahin ang browser id mula sa URL query params.
+    try:
+        value = st.query_params.get(BROWSER_ID_QUERY_KEY)
+    except Exception:
+        try:
+            value = st.experimental_get_query_params().get(BROWSER_ID_QUERY_KEY, [None])
+        except Exception:
+            value = None
+
+    if isinstance(value, list):
+        value = value[0] if value else None
+
+    return str(value) if is_valid_browser_id(value) else None
+
+
+def set_query_browser_id(st, browser_id):
+    # Isulat sa URL para survive sa refresh.
+    if not is_valid_browser_id(browser_id):
+        return
+
+    try:
+        st.query_params[BROWSER_ID_QUERY_KEY] = browser_id
+        return
+    except Exception:
+        pass
+
+    try:
+        st.experimental_set_query_params(**{BROWSER_ID_QUERY_KEY: browser_id})
+    except Exception:
+        pass
+
+
+def get_browser_id(st):
+    # Gumawa o kumuha ng browser id. Hindi ito authentication.
+    existing_id = st.session_state.get(BROWSER_ID_SESSION_KEY)
+
+    if is_valid_browser_id(existing_id):
+        return existing_id
+
+    browser_id = get_query_browser_id(st) or uuid.uuid4().hex
+    st.session_state[BROWSER_ID_SESSION_KEY] = browser_id
+    set_query_browser_id(st, browser_id)
+
+    return browser_id
